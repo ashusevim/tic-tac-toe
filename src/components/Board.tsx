@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import {
+    IconCircle,
+    IconCrown,
+    IconEqual,
+    IconRobot,
+    IconX,
+} from "@tabler/icons-react";
 import Square from "./Square";
+import { cn } from "../lib/utils";
 
 interface BoardProps {
     mode: "1P" | "2P";
@@ -81,6 +90,23 @@ function getBestMove(squares: (string | null)[]): number {
         }
     }
     return bestMove;
+}
+
+function ThinkingDots() {
+    return (
+        <span className="ml-2 flex items-center gap-1 text-sm text-gray-400">
+            <IconRobot size={16} aria-hidden />
+            thinking
+            {[0, 1, 2].map((i) => (
+                <motion.span
+                    key={i}
+                    className="size-1 rounded-full bg-gray-400"
+                    animate={{ opacity: [0.2, 1, 0.2] }}
+                    transition={{ duration: 1, repeat: Infinity, delay: i * 0.15 }}
+                />
+            ))}
+        </span>
+    );
 }
 
 function Board({ mode, playerXName, playerOName, onGameEnd }: BoardProps) {
@@ -170,60 +196,106 @@ function Board({ mode, playerXName, playerOName, onGameEnd }: BoardProps) {
     }, [winner, isDraw, gameEnded, onGameEnd]);
 
     const currentPlayerName = isXNext ? playerXName : playerOName;
+    const gameOver = Boolean(winner) || isDraw;
+    const statusKey = winner ? `win-${winner}` : isDraw ? "draw" : isXNext ? "turn-x" : "turn-o";
 
     return (
         <div>
-            {!winner && !isDraw && (
-                <div className="mb-4 text-xl font-mono">
-                    Current Turn:{" "}
-                    <span className={isXNext ? "text-blue-400" : "text-red-400"}>
-                        {currentPlayerName} ({isXNext ? "X" : "O"})
-                    </span>
-                    {mode === "1P" && !isXNext && (
-                        <span className="ml-2 text-sm text-gray-400">thinking...</span>
-                    )}
-                </div>
-            )}
+            <div
+                role="status"
+                aria-live="polite"
+                className="mb-4 flex min-h-10 items-center justify-center"
+            >
+                <AnimatePresence mode="wait" initial={false}>
+                    <motion.div
+                        key={statusKey}
+                        initial={{ opacity: 0, y: -8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 8 }}
+                        transition={{ duration: 0.18 }}
+                    >
+                        {winner && (
+                            <span className="flex items-center gap-2 text-2xl font-bold text-green-400">
+                                <IconCrown size={28} aria-hidden />
+                                {winner === "X" ? playerXName : playerOName} ({winner}) wins!
+                            </span>
+                        )}
 
-            {winner && (
-                <div className="mb-4 text-2xl font-bold text-green-400">
-                    {winner === "X" ? playerXName : playerOName} ({winner}) wins!
-                </div>
-            )}
+                        {isDraw && (
+                            <span className="flex items-center gap-2 text-2xl font-bold text-yellow-400">
+                                <IconEqual size={26} aria-hidden />
+                                It&apos;s a draw!
+                            </span>
+                        )}
 
-            {isDraw && (
-                <div className="mb-4 text-2xl font-bold text-yellow-400">
-                    It's a draw!
-                </div>
-            )}
-
-            <div className="board flex flex-col content-center items-center">
-                {Array.from({ length: 3 }, (_, row) => (
-                    <div key={row} className="board-row flex gap-1">
-                        {Array.from({ length: 3 }, (_, col) => {
-                            const index = row * 3 + col;
-                            const isWinSquare = winningLine?.includes(index);
-                            const value = squares[index];
-
-                            let colorClass = "";
-                            if (value === "X") colorClass = "text-blue-400";
-                            if (value === "O") colorClass = "text-red-400";
-
-                            let bgClass = "hover:bg-gray-600";
-                            if (isWinSquare) bgClass = "bg-green-900";
-
-                            return (
-                                <Square
-                                    key={`${row}-${col}`}
-                                    value={squares[index]}
-                                    onClick={() => handleClick(index)}
-                                    className={`w-20 h-20 text-2xl font-bold flex items-center justify-center border-2 border-gray-800 cursor-pointer transition-colors duration-200 ${colorClass} ${bgClass}`}
-                                />
-                            );
-                        })}
-                    </div>
-                ))}
+                        {!gameOver && (
+                            <div className="flex items-center gap-2 text-xl font-mono">
+                                {isXNext ? (
+                                    <IconX size={20} stroke={3} className="text-blue-400" aria-hidden />
+                                ) : (
+                                    <IconCircle size={18} stroke={3} className="text-red-400" aria-hidden />
+                                )}
+                                Current Turn:{" "}
+                                <span className={isXNext ? "text-blue-400" : "text-red-400"}>
+                                    {currentPlayerName} ({isXNext ? "X" : "O"})
+                                </span>
+                                {mode === "1P" && !isXNext && <ThinkingDots />}
+                            </div>
+                        )}
+                    </motion.div>
+                </AnimatePresence>
             </div>
+
+            <motion.div
+                role="group"
+                aria-label="Game board"
+                className="board mx-auto grid w-fit grid-cols-3 gap-1 rounded-xl border border-gray-800 bg-black/40 p-2 shadow-lg"
+                initial={{ opacity: 0, scale: 0.94 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+            >
+                {squares.map((_, index) => {
+                    const row = Math.floor(index / 3);
+                    const col = index % 3;
+                    const value = squares[index];
+                    const isWinSquare = winningLine?.includes(index) ?? false;
+                    const isPlayable =
+                        !gameOver && !value && !(mode === "1P" && !isXNext);
+
+                    return (
+                        <motion.div
+                            key={index}
+                            initial={{ opacity: 0, scale: 0.7 }}
+                            animate={
+                                isWinSquare
+                                    ? { opacity: 1, scale: [1, 1.08, 1] }
+                                    : { opacity: 1, scale: 1 }
+                            }
+                            transition={
+                                isWinSquare
+                                    ? { duration: 1.1, repeat: Infinity, ease: "easeInOut" }
+                                    : { delay: index * 0.03, type: "spring", stiffness: 260, damping: 20 }
+                            }
+                        >
+                            <Square
+                                value={value}
+                                onClick={() => handleClick(index)}
+                                disabled={!isPlayable}
+                                label={`Row ${row + 1}, column ${col + 1}${value ? `, ${value}` : ", empty"}`}
+                                className={cn(
+                                    "h-20 w-20 rounded-md border-2 border-gray-800 bg-gray-900 text-2xl font-bold transition-colors duration-200",
+                                    value === "X" && "text-blue-400",
+                                    value === "O" && "text-red-400",
+                                    isWinSquare && "border-green-500 bg-green-900",
+                                    isPlayable && "cursor-pointer hover:bg-gray-600",
+                                    !isPlayable && !value && "cursor-not-allowed",
+                                    value && !isWinSquare && "cursor-default"
+                                )}
+                            />
+                        </motion.div>
+                    );
+                })}
+            </motion.div>
         </div>
     );
 }
