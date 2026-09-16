@@ -1,24 +1,463 @@
 @import "tailwindcss";
 
-:root {
-    font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-    line-height: 1.5;
-    font-weight: 400;
+/* ==========================================================================
+   Design tokens
+   A "broadcast HUD" palette: deep space surfaces, cyan for X, rose for O and
+   indigo as the product accent.
+   ========================================================================== */
+@theme {
+    --font-sans: "Inter", "SF Pro Text", system-ui, -apple-system,
+        BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+        sans-serif;
 
-    color-scheme: dark;
-    color: rgba(255, 255, 255, 0.87);
-    background-color: #242424;
+    /* Surfaces, darkest to lightest */
+    --color-void: #04050c;
+    --color-abyss: #070a16;
+    --color-panel: #0b1022;
+    --color-panel-2: #131a38;
+    --color-hairline: #1d2449;
+    --color-hairline-2: #2c356a;
 
-    font-synthesis: none;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    /* Player accents ("mark-" prefixes avoid clashing with core x/y utilities) */
+    --color-mark-x: #22d3ee;
+    --color-mark-x-2: #38bdf8;
+    --color-mark-o: #fb7185;
+    --color-mark-o-2: #f472b6;
+
+    /* Product accents */
+    --color-brand: #6366f1;
+    --color-brand-2: #a855f7;
+    --color-gold: #fbbf24;
+    --color-mint: #34d399;
+
+    --shadow-hud: 0 30px 70px -30px rgb(0 0 0 / 0.95);
+    --shadow-brand: 0 16px 40px -16px rgb(99 102 241 / 0.85);
+    --shadow-glow-x: 0 0 26px rgb(34 211 238 / 0.5);
+    --shadow-glow-o: 0 0 26px rgb(251 113 133 / 0.5);
+
+    --animate-aurora: aurora 30s ease-in-out infinite alternate;
+    --animate-aurora-slow: aurora 46s ease-in-out infinite alternate-reverse;
+    --animate-scan: scan 8s linear infinite;
+    --animate-breathe: breathe 3.4s ease-in-out infinite;
+
+    @keyframes aurora {
+        0% {
+            transform: translate3d(-6%, -3%, 0) scale(1);
+        }
+        50% {
+            transform: translate3d(5%, 6%, 0) scale(1.14);
+        }
+        100% {
+            transform: translate3d(-3%, 2%, 0) scale(1.04);
+        }
+    }
+
+    @keyframes scan {
+        0% {
+            transform: translateY(-140%);
+            opacity: 0;
+        }
+        30% {
+            opacity: 0.55;
+        }
+        100% {
+            transform: translateY(340%);
+            opacity: 0;
+        }
+    }
+
+    @keyframes breathe {
+        0%,
+        100% {
+            opacity: 0.5;
+        }
+        50% {
+            opacity: 1;
+        }
+    }
 }
 
-body {
-    margin: 0;
-    display: flex;
-    place-items: center;
-    min-width: 320px;
-    min-height: 100vh;
+/* ==========================================================================
+   Base
+   ========================================================================== */
+@layer base {
+    :root {
+        color-scheme: dark;
+        color: rgb(255 255 255 / 0.92);
+        background-color: var(--color-void);
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    html,
+    body {
+        min-height: 100%;
+    }
+
+    body {
+        margin: 0;
+        min-width: 320px;
+        background-color: var(--color-void);
+        background-image:
+            radial-gradient(
+                120% 85% at 50% -25%,
+                rgb(99 102 241 / 0.22),
+                transparent 62%
+            ),
+            radial-gradient(
+                80% 60% at 100% 0%,
+                rgb(34 211 238 / 0.1),
+                transparent 58%
+            ),
+            radial-gradient(
+                90% 65% at 0% 100%,
+                rgb(251 113 133 / 0.1),
+                transparent 58%
+            );
+        background-attachment: fixed;
+    }
+
+    ::selection {
+        background: rgb(99 102 241 / 0.5);
+    }
+
+    /* Keyboard focus must always be unmistakable. */
+    :focus-visible {
+        outline: 2px solid rgb(129 140 248 / 0.9);
+        outline-offset: 2px;
+    }
 }
+
+/* ==========================================================================
+   Components
+   Anything that must not disturb the DOM text (innerText is asserted by the
+   Playwright suites) is drawn with pseudo-elements, never extra nodes.
+   ========================================================================== */
+@layer components {
+    /* ---------- Surfaces ---------- */
+    .hud-panel {
+        position: relative;
+        border-radius: 1.25rem;
+        background-image: linear-gradient(
+            180deg,
+            rgb(19 26 56 / 0.72),
+            rgb(7 10 22 / 0.88)
+        );
+        box-shadow:
+            0 30px 70px -30px rgb(0 0 0 / 0.95),
+            inset 0 1px 0 0 rgb(255 255 255 / 0.06),
+            inset 0 0 0 1px rgb(255 255 255 / 0.03);
+        backdrop-filter: blur(18px) saturate(140%);
+        -webkit-backdrop-filter: blur(18px) saturate(140%);
+    }
+
+    /* 1px gradient hairline drawn with a mask so it can fade out. */
+    .hud-ring {
+        position: relative;
+    }
+    .hud-ring::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        padding: 1px;
+        background-image: linear-gradient(
+            150deg,
+            rgb(255 255 255 / 0.3),
+            rgb(255 255 255 / 0.07) 38%,
+            rgb(255 255 255 / 0) 72%
+        );
+        -webkit-mask:
+            linear-gradient(#000 0 0) content-box,
+            linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor;
+        mask:
+            linear-gradient(#000 0 0) content-box,
+            linear-gradient(#000 0 0);
+        mask-composite: exclude;
+        pointer-events: none;
+    }
+
+    /* Faint film grain; keeps large dark areas from banding. */
+    .grain::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        pointer-events: none;
+        opacity: 0.045;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ---------- Typography ---------- */
+    .text-gradient {
+        background-image: linear-gradient(
+            115deg,
+            #ffffff 8%,
+            #c7d2fe 48%,
+            #67e8f9 84%
+        );
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+
+    .micro-label {
+        font-size: 0.625rem;
+        font-weight: 600;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: rgb(255 255 255 / 0.38);
+    }
+
+    /* ---------- Scoreboard stat cards ---------- */
+    .stat-card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.25rem;
+        overflow: hidden;
+        border-radius: 0.9rem;
+        border: 1px solid var(--color-hairline);
+        background-image: linear-gradient(
+            180deg,
+            rgb(19 26 56 / 0.62),
+            rgb(7 10 22 / 0.85)
+        );
+        padding: 0.7rem 0.5rem;
+        box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.05);
+        transition:
+            border-color 0.3s ease,
+            box-shadow 0.3s ease;
+    }
+
+    /* Top accent hairline */
+    .stat-card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 0;
+        left: 0;
+        height: 1px;
+        background-image: linear-gradient(
+            90deg,
+            transparent,
+            var(--stat-accent),
+            transparent
+        );
+        opacity: 0.85;
+    }
+
+    /* Soft bloom rising from the bottom edge */
+    .stat-card::after {
+        content: "";
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        height: 60%;
+        pointer-events: none;
+        background-image: radial-gradient(
+            70% 100% at 50% 100%,
+            var(--stat-bloom),
+            transparent 72%
+        );
+        opacity: 0.6;
+    }
+
+    .stat-card--x {
+        --stat-accent: var(--color-mark-x);
+        --stat-bloom: rgb(34 211 238 / 0.3);
+        --stat-ring: rgb(34 211 238 / 0.35);
+    }
+    .stat-card--draw {
+        --stat-accent: rgb(255 255 255 / 0.35);
+        --stat-bloom: rgb(148 163 184 / 0.24);
+        --stat-ring: rgb(148 163 184 / 0.28);
+    }
+    .stat-card--o {
+        --stat-accent: var(--color-mark-o);
+        --stat-bloom: rgb(251 113 133 / 0.3);
+        --stat-ring: rgb(251 113 133 / 0.35);
+    }
+
+    /* Highlighted while that side is on the clock. */
+    .stat-card--active {
+        border-color: var(--stat-ring);
+        box-shadow:
+            inset 0 1px 0 0 rgb(255 255 255 / 0.07),
+            0 12px 34px -20px var(--stat-accent);
+    }
+
+    /* ---------- Status pill ---------- */
+    .status-pill {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        overflow: hidden;
+        border-radius: 999px;
+        border: 1px solid var(--color-hairline);
+        background-image: linear-gradient(
+            180deg,
+            rgb(19 26 56 / 0.75),
+            rgb(7 10 22 / 0.85)
+        );
+        padding: 0.5rem 1.15rem;
+        box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.05);
+        transition:
+            border-color 0.3s ease,
+            box-shadow 0.3s ease;
+    }
+
+    .status-pill::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 14%;
+        left: 14%;
+        height: 1px;
+        background-image: linear-gradient(
+            90deg,
+            transparent,
+            var(--pill-accent, rgb(255 255 255 / 0.4)),
+            transparent
+        );
+        pointer-events: none;
+    }
+
+    .status-pill--x {
+        --pill-accent: var(--color-mark-x);
+    }
+    .status-pill--o {
+        --pill-accent: var(--color-mark-o);
+        border-color: rgb(251 113 133 / 0.28);
+        box-shadow:
+            inset 0 1px 0 0 rgb(255 255 255 / 0.05),
+            0 16px 40px -26px rgb(251 113 133 / 0.9);
+    }
+    .status-pill--win {
+        --pill-accent: var(--color-mint);
+        border-color: rgb(52 211 153 / 0.4);
+        box-shadow:
+            inset 0 1px 0 0 rgb(255 255 255 / 0.06),
+            0 18px 46px -22px rgb(52 211 153 / 0.85);
+    }
+    .status-pill--draw {
+        --pill-accent: var(--color-gold);
+        border-color: rgb(251 191 36 / 0.3);
+        box-shadow:
+            inset 0 1px 0 0 rgb(255 255 255 / 0.05),
+            0 18px 46px -24px rgb(251 191 36 / 0.8);
+    }
+
+    /* ---------- Game board ---------- */
+    .board-bezel {
+        position: relative;
+        border-radius: 1.4rem;
+        border: 1px solid var(--color-hairline);
+        background-image: linear-gradient(
+            180deg,
+            rgb(19 26 56 / 0.5),
+            rgb(4 5 12 / 0.92)
+        );
+        padding: 0.75rem;
+        box-shadow:
+            0 34px 80px -40px rgb(0 0 0 / 1),
+            inset 0 1px 0 0 rgb(255 255 255 / 0.05),
+            inset 0 0 50px -24px rgb(99 102 241 / 0.55);
+    }
+
+    .cell {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.8rem;
+        border: 1px solid var(--color-hairline);
+        background-image: linear-gradient(
+            180deg,
+            rgb(19 26 56 / 0.55),
+            rgb(7 10 22 / 0.9)
+        );
+        box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.04);
+        transition:
+            border-color 0.25s ease,
+            box-shadow 0.25s ease;
+    }
+
+    .cell--playable {
+        cursor: pointer;
+    }
+
+    /* Placement dot: marks an open cell, which is also the hover reticle. */
+    .cell--empty::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        pointer-events: none;
+        opacity: 0.5;
+        transition: opacity 0.25s ease;
+        background-image: radial-gradient(
+            circle at 50% 50%,
+            rgb(255 255 255 / 0.14) 0 1.5px,
+            transparent 2.5px
+        );
+    }
+
+    .cell--empty.cell--playable:hover::before {
+        opacity: 1;
+        background-image:
+            radial-gradient(
+                circle at 50% 50%,
+                rgb(199 210 254 / 0.95) 0 1.5px,
+                transparent 2.5px
+            ),
+            radial-gradient(
+                62% 62% at 50% 50%,
+                rgb(129 140 248 / 0.3),
+                transparent 72%
+            );
+    }
+
+    .cell--playable:hover {
+        border-color: rgb(129 140 248 / 0.55);
+        box-shadow:
+            inset 0 1px 0 0 rgb(255 255 255 / 0.07),
+            0 0 0 1px rgb(129 140 248 / 0.25),
+            0 20px 44px -26px rgb(99 102 241 / 0.95);
+    }
+
+    .cell--win {
+        border-color: rgb(52 211 153 / 0.6);
+        background-image: linear-gradient(
+            180deg,
+            rgb(16 185 129 / 0.22),
+            rgb(4 5 12 / 0.85)
+        );
+        box-shadow:
+            inset 0 0 32px -8px rgb(52 211 153 / 0.55),
+            0 0 30px -8px rgb(52 211 153 / 0.5);
+    }
+}
+
+/* ==========================================================================
+   Ambient motion is decorative only, so it can be switched off wholesale.
+   Declared outside the cascade layers so it wins without !important.
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+    .animate-aurora,
+    .animate-aurora-slow,
+    .animate-scan,
+    .animate-breathe {
+        animation: none;
+    }
+}
+
+
+

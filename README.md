@@ -8,12 +8,14 @@ A Tic-Tac-Toe game built using React.js, TypeScript, and Tailwind CSS.
 - **1 Player (vs AI)** mode backed by an unbeatable minimax AI, or local **2 Players** mode
 - Custom player names for both X and O
 - Scoreboard that tracks wins for X, wins for O, and draws across rounds
-- Real-time winner detection with the winning line highlighted
+- Real-time winner detection: the three winning cells glow and a stroke is animated through them
 - Draw game detection
+- Scoreboard highlights whichever side is on the clock
 - "New Round" keeps the running score, "Back to Menu" starts a fresh series
 - Animated board, buttons, and score rolls (respects `prefers-reduced-motion`)
+- Broadcast-HUD styling: aurora backdrop, glass panels, gradient hairlines, glow accents
 - Icon-driven UI with active-player feedback and screen-reader friendly controls
-- Responsive design with Tailwind CSS
+- Responsive down to 320px wide, driven by Tailwind design tokens
 
 ## Tech Stack
 
@@ -28,15 +30,16 @@ A Tic-Tac-Toe game built using React.js, TypeScript, and Tailwind CSS.
 ```
 src/
 ├── components/
-│   ├── Board.tsx       # Game state, minimax AI, status banner
-│   ├── Button.tsx      # Animated button with variants + toggle state
-│   ├── Scoreboard.tsx  # X / draws / O score cards
+│   ├── Backdrop.tsx    # Decorative aurora background, grid, scanline, vignette
+│   ├── Board.tsx       # Game state, minimax AI, status pill, winning-line overlay
+│   ├── Button.tsx      # Animated button with variants + sliding toggle pill
+│   ├── Scoreboard.tsx  # X / draws / O stat cards
 │   └── Square.tsx      # Individual square component
 ├── lib/
 │   └── utils.ts        # cn() class name helper (clsx + tailwind-merge)
 ├── App.tsx             # Main application component
 ├── main.tsx            # Application entry point
-└── index.css           # Global styles
+└── index.css           # Design tokens, base styles and component classes
 ```
 
 ## Game Modes
@@ -101,22 +104,56 @@ scoreboard totals, and animates between the menu and the game.
 Core game component that handles:
 - Game state management
 - Player turns and the minimax AI opponent
-- Winner detection and winning-line highlighting
+- Winner detection, winning-cell glow and the animated winning-line overlay
 - Draw detection
 - Square click handling
-- An accessible status banner (`role="status"`, `aria-live="polite"`)
+- An accessible status pill (`role="status"`, `aria-live="polite"`) that doubles
+  as the turn indicator and the AI "thinking" read-out
+
+The board geometry is defined once by `CELL_SIZE` / `CELL_GAP`; `Square.tsx`
+uses the matching `h-[84px] w-[84px]` size and the grid uses `gap-2`, so the
+winning stroke lands exactly on the three cells. Change the three together.
 
 ### Button.tsx
 Reusable animated button with `primary` / `warning` / `danger` / `neutral`
 variants, `md` / `lg` sizes, and an optional `toggle` + `selected` mode that
-exposes `aria-pressed` for the mode selector.
+exposes `aria-pressed` for the mode selector. The selected button in a toggle
+group renders a shared-layout pill (`layoutId`), so the highlight slides between
+the 1P and 2P options, and every button has a light sweep on hover.
 
 ### Scoreboard.tsx
-Score cards for X, draws, and O with animated number transitions.
+Stat cards for X, draws and O with animated number transitions. The card of
+whichever side is on the clock is highlighted via the `activeSide` prop.
 
 ### Square.tsx
 Individual square component that represents each cell in the 3x3 grid. Renders
-Tabler X/O icons with an entrance animation and an `aria-label` describing the cell.
+Tabler X/O icons with a glow and an entrance animation, plus an `aria-label`
+describing the cell. Open cells get a faint placement dot that brightens on hover.
+
+### Backdrop.tsx
+Purely decorative ambient background: drifting aurora blooms, a masked technical
+grid, a slow scanline sweep and a vignette. Hidden from assistive tech and
+`pointer-events-none`, and its animations are dropped under
+`prefers-reduced-motion`.
+
+## Design System
+
+Styling is token driven, using Tailwind CSS v4's CSS-first config in
+`src/index.css`:
+
+- **Tokens** (`@theme`): surface colours (`void`, `abyss`, `panel`, `hairline`),
+  player accents (`mark-x` cyan, `mark-o` rose), product accents (`brand`
+  indigo, `brand-2` violet, `gold`, `mint`), layered shadows and the ambient
+  keyframes.
+- **Component classes** (`@layer components`): `hud-panel`, `hud-ring` (1px
+  gradient hairline drawn with a mask), `grain`, `text-gradient`, `micro-label`,
+  `stat-card(--x|--draw|--o|--active)`, `status-pill(--x|--o|--win|--draw)`,
+  `board-bezel` and `cell(--playable|--empty|--win)`.
+- Anything that only decorates a component — card accent hairlines, blooms,
+  status pill highlights, cell dots — is drawn with `::before` / `::after`, never
+  with extra DOM nodes. That keeps the rendered text (which the Playwright
+  suites assert on) free of decoration.
+
 
 ## Contributing
 
